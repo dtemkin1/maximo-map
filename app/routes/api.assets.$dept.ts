@@ -1,9 +1,17 @@
+import { redirect } from "react-router";
 import { DEPARTMENTS } from "~/lib/layers";
+import { getSession } from "~/sessions.server";
 import { MaximoAPIForAssetMXAPIASSETApiFactory } from "../lib/maximo";
 import type { Route } from "./+types/api.assets.$dept";
 
-export async function loader({ params }: Route.LoaderArgs) {
+export async function loader({ params, request }: Route.LoaderArgs) {
 	const { dept } = params;
+	const session = await getSession(request.headers.get("Cookie"));
+
+	if (!session.has("api_key")) {
+		// Redirect to the login page if they are not signed in.
+		return redirect("/login");
+	}
 
 	if (!(dept in DEPARTMENTS)) {
 		throw new Response("Department not found", { status: 404 });
@@ -33,7 +41,7 @@ export async function loader({ params }: Route.LoaderArgs) {
 			undefined,
 			undefined,
 			undefined,
-			import.meta.env.VITE_MAXIMO_API_KEY,
+			session.get("api_key"),
 		);
 		return await assetData;
 	} catch (error) {

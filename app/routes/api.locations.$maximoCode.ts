@@ -1,5 +1,7 @@
 import proj4 from "proj4";
+import { redirect } from "react-router";
 import { LocationHierarchyMxLoaderMXLLOCATIONApiFactory } from "~/lib/maximo";
+import { getSession } from "~/sessions.server";
 import type { Route } from "./+types/api.locations.$maximoCode";
 
 const BASE_URL = [
@@ -131,8 +133,15 @@ async function lookForParentLayer(maximoCode: string) {
 	}
 }
 
-export async function loader({ params }: Route.LoaderArgs) {
+export async function loader({ params, request }: Route.LoaderArgs) {
 	const { maximoCode } = params;
+
+	const session = await getSession(request.headers.get("Cookie"));
+
+	if (!session.has("api_key")) {
+		// Redirect to the login page if they are not signed in.
+		return redirect("/login");
+	}
 
 	const result = await lookForLayer(maximoCode);
 	if (result !== null) {

@@ -1,6 +1,7 @@
 import {
 	Avatar,
 	Box,
+	Button,
 	createListCollection,
 	Flex,
 	FormatNumber,
@@ -26,19 +27,15 @@ import {
 	Source,
 	useControl,
 } from "react-map-gl/maplibre";
-
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
-
 import {
 	type COLLECTIONMXAPIASSET,
 	SystemWhoamiApiFactory,
 } from "../lib/maximo";
-
 import type { Route } from "./+types/_index";
-
 import "maplibre-gl/dist/maplibre-gl.css"; // See notes below
-
+import { data, Link, redirect } from "react-router";
 import {
 	DEPARTMENTS,
 	metroEocAssetLayer,
@@ -46,11 +43,19 @@ import {
 	metroLiveBaseMap,
 } from "~/lib/layers";
 import { useColorMode } from "../components/ui/color-mode";
+import { getSession } from "../sessions.server";
 
 const smVariant = { navigation: "drawer", navigationButton: true } as const;
 const mdVariant = { navigation: "sidebar", navigationButton: false } as const;
 
-export async function loader() {
+export async function loader({ request }: Route.LoaderArgs) {
+	const session = await getSession(request.headers.get("Cookie"));
+
+	if (!session.has("api_key")) {
+		// Redirect to the home page if they are not signed in.
+		return redirect("login");
+	}
+
 	const whoAmI = SystemWhoamiApiFactory(
 		undefined,
 		undefined,
@@ -60,10 +65,12 @@ export async function loader() {
 		undefined,
 		undefined,
 		"application/json",
-		import.meta.env.VITE_MAXIMO_API_KEY,
+		session.get("api_key"),
 	);
 
-	return Promise.all([whoAmI.then((response) => response.json())]);
+	return data({
+		whoAmI: await whoAmI.then((response) => response.json()),
+	});
 }
 
 try {
@@ -93,7 +100,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
 	const [loading, setLoading] = useState(false);
 	const [loadingLocations, setLoadingLocations] = useState(false);
 
-	const [user] = loaderData;
+	const { whoAmI } = loaderData;
 
 	const departmentCollection = createListCollection({
 		items: Object.keys(DEPARTMENTS).map((department) => ({
@@ -180,8 +187,6 @@ export default function App({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<>
-			<title>WMATA MAXIMO Asset Health Map</title>
-			<meta name="description" content="tbd! :3"></meta>
 			<Sidebar
 				variant={variants?.navigation}
 				isOpen={isSidebarOpen}
@@ -266,21 +271,22 @@ export default function App({ loaderData }: Route.ComponentProps) {
 							</Select.Positioner>
 						</Portal>
 					</Select.Root>
-					<Suspense>
-						{" "}
-						<HStack key={user.primaryemail} gap="4" alignSelf={"flex-end"}>
-							<Avatar.Root>
-								<Avatar.Fallback name={user.displayName} />
-								{/* <Avatar.Image src={""} /> */}
-							</Avatar.Root>
-							<Stack gap="0">
-								<Text fontWeight="medium">{user.displayName}</Text>
-								<Text color="fg.muted" textStyle="sm">
-									{user.primaryemail}
-								</Text>
-							</Stack>
-						</HStack>
-					</Suspense>
+
+					<HStack key={whoAmI.primaryemail} gap="4" alignSelf={"flex-end"}>
+						<Avatar.Root>
+							<Avatar.Fallback name={whoAmI.displayName} />
+							{/* <Avatar.Image src={""} /> */}
+						</Avatar.Root>
+						<Stack gap="0">
+							<Text fontWeight="medium">{whoAmI.displayName}</Text>
+							<Text color="fg.muted" textStyle="sm">
+								{whoAmI.primaryemail}
+							</Text>
+						</Stack>
+					</HStack>
+					<Button variant="outline" asChild>
+						<Link to="/logout">Logout</Link>
+					</Button>
 				</Flex>
 			</Sidebar>
 			<VStack ml={!variants?.navigationButton ? 60 : 0} h="100%" gap={0}>
