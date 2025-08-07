@@ -9,6 +9,7 @@ import {
 	Portal,
 	Select,
 	Spacer,
+	Spinner,
 	Stack,
 	Text,
 	useBreakpointValue,
@@ -17,7 +18,7 @@ import {
 import { HeatmapLayer } from "@deck.gl/aggregation-layers";
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import {
 	Layer,
 	Map as MapComponent,
@@ -88,7 +89,9 @@ export default function App({ loaderData }: Route.ComponentProps) {
 	const [assetLocations, setAssetLocations] = useState<
 		Map<string, [string, [number, number]] | null>
 	>(new Map());
+
 	const [loading, setLoading] = useState(false);
+	const [loadingLocations, setLoadingLocations] = useState(false);
 
 	const [user] = loaderData;
 
@@ -101,20 +104,20 @@ export default function App({ loaderData }: Route.ComponentProps) {
 	const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
 
 	useEffect(() => {
-		if (department.length > 0) {
-			setLoading(true);
-			setAssets([]);
-			fetch(`/api/assets/${department[0]}`)
-				.then((response) => response.json())
-				.then((data) => {
-					setAssets(data.member);
-					setLoading(false);
-				});
-		}
+		setLoading(true);
+		setAssets([]);
+
+		Promise.all(department.map((dep) => fetch(`/api/assets/${dep}`)))
+			.then((response) => Promise.all(response.map((res) => res.json())))
+			.then((data) => {
+				setAssets(data.flatMap((item) => item.member));
+				setLoading(false);
+			});
 	}, [department]);
 
 	useEffect(() => {
 		if (assets.length > 0) {
+			setLoadingLocations(true);
 			const uniqueLocations = new Set<string>(
 				assets
 					.map((asset) => asset.location)
@@ -137,40 +140,43 @@ export default function App({ loaderData }: Route.ComponentProps) {
 					}),
 			);
 
+			if (promises.length === 0) {
+				setLoadingLocations(false);
+			}
+
 			const chunkSize = 25;
 			for (let i = 0; i < promises.length; i += chunkSize) {
 				const chunk = promises.slice(i, i + chunkSize);
-				Promise.all(chunk).then((results) => {
-					results.forEach(([location, coords]) => {
-						setAssetLocations(
-							(prevMap) => new Map(prevMap.set(location, coords)),
-						);
+				Promise.all(chunk)
+					.then((results) => {
+						results.forEach(([location, coords]) => {
+							setAssetLocations(
+								(prevMap) => new Map(prevMap.set(location, coords)),
+							);
+						});
+					})
+					.then(() => {
+						setLoadingLocations(false);
 					});
-				});
 			}
+		} else {
+			setLoadingLocations(false);
 		}
 	}, [assets, assetLocations.get]);
 
-	const heatmapData = new HeatmapLayer({
-		id: "heatmap",
-		aggregation: "SUM",
-		data: assets.filter((asset) => assetLocations.get(asset.location)),
-		getPosition: (d) => assetLocations.get(d.location)?.[1] || [0.0, 0.0],
-		getWeight: () => 1, //(assetLocations.get(d.location) ? 1 : 0),
-		radiusPixels: 50,
-		srs: "EPSG:3857",
-		colorRange: [
-			[247, 251, 255],
-			[222, 235, 247],
-			[198, 219, 239],
-			[158, 202, 225],
-			[107, 174, 214],
-			[66, 146, 198],
-			[33, 113, 181],
-			[8, 81, 156],
-			[8, 48, 107],
-		],
-	});
+	const heatmapData = useMemo(
+		() =>
+			new HeatmapLayer({
+				id: "heatmap",
+				aggregation: "SUM",
+				data: assets.filter((asset) => assetLocations.get(asset.location)),
+				getPosition: (d) => assetLocations.get(d.location)?.[1] || [0.0, 0.0],
+				getWeight: () => 1, //(assetLocations.get(d.location) ? 1 : 0),
+				radiusPixels: 50,
+				srs: "EPSG:3857",
+			}),
+		[assets, assetLocations],
+	);
 
 	return (
 		<>
@@ -188,6 +194,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
 					gap="4"
 					justifyContent={"flex-end"}
 				>
+					{loadingLocations ? <Spinner size="sm" /> : null}
 					{!loading &&
 						assets.length > 0 &&
 						assetLocations &&
@@ -208,7 +215,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
 												[string, [number, number]] | null,
 											]) => (
 												<List.Item
-													key={val ? val[0] : key}
+													key={key}
 												>{`${val ? val[0] : key} (${assets.filter((asset) => asset.location === key).length})`}</List.Item>
 											),
 										)}
@@ -227,6 +234,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
 						</Text>
 					)}
 					<Select.Root
+						multiple
 						collection={departmentCollection}
 						width="100%"
 						value={department}
@@ -241,6 +249,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
 								<Select.ValueText placeholder="Select department" />
 							</Select.Trigger>
 							<Select.IndicatorGroup>
+								<Select.ClearTrigger />
 								<Select.Indicator />
 							</Select.IndicatorGroup>
 						</Select.Control>
