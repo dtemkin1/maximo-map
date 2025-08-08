@@ -23,6 +23,7 @@ const { getSession, commitSession, destroySession } =
 			path: "/",
 			sameSite: "lax",
 			secrets: [import.meta.env.SESSION_SECRET || "s3cret1"],
+			// change to false if you have to use http
 			secure: true,
 		},
 	});
