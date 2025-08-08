@@ -73,6 +73,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	});
 }
 
+// VERY sketchy but it has to be done :///
 try {
 	process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 } catch {}
@@ -178,6 +179,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
 				aggregation: "SUM",
 				data: assets.filter((asset) => assetLocations.get(asset.location)),
 				getPosition: (d) => assetLocations.get(d.location)?.[1] || [0.0, 0.0],
+				// ADD ASSET HEALTH SCORE HERE
 				getWeight: () => 1, //(assetLocations.get(d.location) ? 1 : 0),
 				radiusPixels: 50,
 				srs: "EPSG:3857",
