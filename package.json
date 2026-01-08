@@ -14,7 +14,7 @@
 		"@emotion/react": "^11.14.0",
 		"@react-router/express": "^7.7.1",
 		"@react-router/fs-routes": "^7.7.1",
-		"@react-router/node": "^7.5.3",
+		"@react-router/node": "^7.9.4",
 		"@react-router/serve": "^7.7.1",
 		"compression": "^1.8.1",
 		"deck.gl": "^9.1.14",
